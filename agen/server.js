@@ -2,16 +2,15 @@ const express = require("express");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
-const multer = require("multer"); // <-- TAMBAHAN
+const multer = require("multer");
 
 const app = express();
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // <-- TAMBAHAN
+app.use(express.urlencoded({ extended: true }));
 
-// Konfigurasi multer
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 4 * 1024 * 1024 } // 4 MB
+  limits: { fileSize: 4 * 1024 * 1024 }
 }).single('file');
 
 const KEY = process.env.GEMINI_API_KEY;
@@ -51,7 +50,6 @@ function pick(q){
   }).sort((a,b)=>b.s-a.s);
 }
 
-// ===== ENDPOINT ASK (TIDAK DIUBAH) =====
 app.post("/ask", async (req,res)=>{
   const q=(req.body.question||"").trim();
   if(!q) return res.status(400).json({error:"Pertanyaan kosong"});
@@ -67,7 +65,6 @@ app.post("/ask", async (req,res)=>{
   }catch(e){ res.status(500).json({error:e.message}); }
 });
 
-// ===== ENDPOINT UPLOAD (FITUR BARU) =====
 app.post("/upload", (req, res) => {
   upload(req, res, function (err) {
     if (err) {
@@ -87,7 +84,6 @@ app.post("/upload", (req, res) => {
   });
 });
 
-// ===== HALAMAN UTAMA (HTML) =====
 const HTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -115,7 +111,6 @@ button{padding:12px 16px;border-radius:10px;border:none;background:#38bdf8;color
 <body>
 <header>🤖 Agen AI Google Cloud</header>
 
-<!-- FORM UPLOAD -->
 <div class="upload-area">
   <input type="file" id="fileInput">
   <button onclick="uploadFile()">📎 Upload</button>
@@ -159,7 +154,6 @@ async function kirim(e){
   return false;
 }
 
-// FUNGSI UPLOAD FILE
 async function uploadFile() {
   const input = document.getElementById('fileInput');
   const preview = document.getElementById('file-preview');
