@@ -7,23 +7,25 @@ const EXTENSIONS = [
 ];
 
 function registerExtensions(app) {
-  console.log('[Loader] Memulai pendaftaran ekstensi...');
+  console.log('[Loader] 🔥 registerExtensions DIPANGGIL');
   let loaded = 0, failed = 0;
 
   for (const extPath of EXTENSIONS) {
+    console.log(`[Loader] Mencoba memuat: ${extPath}`);
     try {
       const fullPath = path.resolve(__dirname, extPath);
+      console.log(`[Loader] fullPath: ${fullPath}`);
       if (!fs.existsSync(fullPath + '.js') && !fs.existsSync(fullPath + '.cjs')) {
-        console.warn(`[Loader] Ekstensi ${extPath} tidak ditemukan, dilewati.`);
+        console.warn(`[Loader] File ${extPath} tidak ditemukan.`);
         continue;
       }
       const extModule = require(fullPath);
       if (typeof extModule.register === 'function') {
         extModule.register(app);
-        console.log(`[Loader] ✅ ${extPath} berhasil didaftarkan.`);
+        console.log(`[Loader] ✅ ${extPath} berhasil.`);
         loaded++;
       } else {
-        console.warn(`[Loader] ⚠️ ${extPath} tidak memiliki fungsi register().`);
+        console.warn(`[Loader] ⚠️ ${extPath} tidak punya register().`);
         failed++;
       }
     } catch (err) {
