@@ -119,4 +119,7 @@ async function kirim(e){
 </body>
 </html>`;
 
-app.listen(PORT, ()=>console.log("Server jalan di port "+PORT));
+if (require.main === module) {
+  app.listen(PORT, () => console.log("Server jalan di port " + PORT));
+}
+module.exports = app;
