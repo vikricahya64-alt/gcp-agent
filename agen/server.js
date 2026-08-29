@@ -8,7 +8,6 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Konfigurasi Upload (Wajib memoryStorage untuk Vercel, maksimal 4MB)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 }
@@ -22,7 +21,6 @@ const PORT = process.env.PORT || 3000;
 const genAI = new GoogleGenerativeAI(KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// Fungsi membaca skill
 function findSkills(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
     const p = path.join(dir, name);
@@ -38,10 +36,7 @@ try {
     name: f.replace(SKILLS_DIR + "/", "").replace("/SKILL.md", ""),
     preview: fs.readFileSync(f, "utf-8").slice(0, 2000)
   }));
-  console.log("Skill dimuat: " + index.length);
-} catch (e) {
-  console.log("Folder skills tidak ditemukan atau kosong, melanjutkan tanpa skill.");
-}
+} catch (e) { console.log("Skill kosong."); }
 
 const STOP = new Set(["apa", "itu", "ini", "dan", "yang", "di", "ke", "dari"]);
 function tokens(q) { return q.toLowerCase().split(/\W+/).filter(t => t && !STOP.has(t)); }
@@ -57,7 +52,6 @@ function pick(q) {
   }).sort((a,b) => b.s - a.s).slice(0, 3).filter(x => x.s > 0);
 }
 
-// ===================== ROUTE CHAT =====================
 app.post("/ask", async (req, res) => {
   const q = (req.body.question || "").trim();
   if (!q) return res.status(400).json({ error: "Pertanyaan kosong" });
@@ -66,86 +60,196 @@ app.post("/ask", async (req, res) => {
     const context = top.length 
       ? top.map(x => `=== SKILL: ${x.name} ===\n${x.preview}`).join("\n\n")
       : "(tidak ada skill spesifik; gunakan pengetahuan umum)";
-    
     const r = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: "Kamu agen AI ahli Google Cloud. Jawab dengan singkat, padat, dan jelas.\n\nKonteks:\n" + context + "\n\nPertanyaan: " + q }] }]
+      contents: [{ role: "user", parts: [{ text: "Kamu agen AI ahli Google Cloud. Jawab singkat.\n\nKonteks:\n" + context + "\n\nPertanyaan: " + q }] }]
     });
-    
     res.json({ answer: r.response.text(), skills: top.map(x => x.name) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ===================== ROUTE UPLOAD =====================
-app.post("/upload", (req, res) => {
-  upload(req, res, function (err) {
-    if (err) {
-      console.log("Multer Error:", err.message);
-      return res.status(400).json({ error: "Upload Error: " + err.message });
-    }
-    if (!req.file) {
-      console.log("Tidak ada file diterima");
-      return res.status(400).json({ error: "Tidak ada file yang dipilih" });
-    }
-
-    console.log("File berhasil masuk:", req.file.originalname, req.file.size);
-    // Anda bisa menambahkan logika pengolahan gambar ke Gemini di sini menggunakan req.file.buffer
-
-    res.json({
-      message: "Upload berhasil!",
-      file: {
-        name: req.file.originalname,
-        size: req.file.size,
-        type: req.file.mimetype
-      }
-    });
+app.post("/upload", async (req, res) => {
+  upload(req, res, async function (err) {
+    if (err) return res.status(400).json({ error: "Upload Error: " + err.message });
+    if (!req.file) return res.status(400).json({ error: "Tidak ada file yang dipilih" });
+    try {
+      const imagePart = { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } };
+      const r = await model.generateContent({ contents: [{ role: "user", parts: [{ text: "Analisis gambar ini secara detail." }, imagePart] }] });
+      res.json({ message: "Upload berhasil!", answer: r.response.text(), file: { name: req.file.originalname, size: req.file.size } });
+    } catch (e) { res.status(500).json({ error: e.message }); }
   });
 });
 
-// ===================== FRONTEND HTML & CSS =====================
+// ================== UI SEMPURNA & RESPONSIF (100dvh) ==================
 const HTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Agent GCP</title>
+  <link rel="icon" href="data:,">
   <style>
-    body{margin:0;font-family:system-ui,sans-serif;background:#0e1621;color:#fff}
-    header{padding:12px;background:#1e293b;text-align:center;font-weight:bold}
-    #chat{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;height:60vh}
-    .msg{max-width:85%;padding:10px;border-radius:10px;white-space:pre-wrap}
-    .user{align-self:flex-end;background:#0ea5e9;color:#fff}
-    .bot{align-self:flex-start;background:#1e293b}
-    .tag{display:block;margin-top:6px;font-size:11px;color:#94a3b8}
-    form{display:flex;gap:8px;padding:10px;background:#1e293b}
-    input[type=text]{flex:1;padding:12px;border-radius:10px;border:none;font-size:16px}
-    button{padding:12px 16px;border-radius:10px;border:none;background:#0ea5e9;color:#fff;font-weight:bold}
-    
-    /* === PERBAIKAN CSS UNTUK TAMPILAN HP (AGAR TIDAK TERPOTONG) === */
-    .upload-area{background:#1e293b;padding:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
-    .upload-area input[type=file]{flex:1;min-width:100px;font-size:12px;color:#e2e8f0}
-    .upload-area button{background:#0ea5e9;white-space:nowrap}
-    .upload-area button:hover{background:#38bdf8}
-    #file-preview{color:#94a3b8;font-size:13px;width:100%}
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh; /* Kunci penting: Menyesuaikan dengan keyboard HP */
+    }
+
+    /* Header */
+    header {
+      padding: 15px;
+      background: #1e293b;
+      text-align: center;
+      font-weight: 700;
+      font-size: 18px;
+      border-bottom: 1px solid #334155;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    /* Chat Area (Fleksibel) */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #0f172a;
+      scroll-behavior: smooth;
+    }
+
+    /* Bubble Chat */
+    .msg {
+      max-width: 85%;
+      padding: 12px 14px;
+      border-radius: 16px;
+      line-height: 1.5;
+      font-size: 15px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .user {
+      align-self: flex-end;
+      background: #2563eb;
+      border-bottom-right-radius: 4px;
+    }
+    .bot {
+      align-self: flex-start;
+      background: #334155;
+      border-bottom-left-radius: 4px;
+    }
+    .tag {
+      display: block;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    /* Area Input & Upload (Footer Tetap di Bawah) */
+    .footer {
+      background: #1e293b;
+      padding: 12px;
+      border-top: 1px solid #334155;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .upload-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* Sembunyikan Input File Asli, Pakai Custom Button */
+    #fileInput {
+      display: none;
+    }
+
+    .btn-upload {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+    .btn-upload:hover { background: #1d4ed8; }
+    .btn-upload:active { transform: scale(0.98); }
+
+    #file-preview {
+      flex: 1;
+      font-size: 13px;
+      color: #94a3b8;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: #0f172a;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+
+    /* Baris Chat Input */
+    .chat-row {
+      display: flex;
+      gap: 10px;
+    }
+    input[type=text] {
+      flex: 1;
+      padding: 12px 16px;
+      border-radius: 24px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: white;
+      font-size: 16px;
+      outline: none;
+    }
+    input[type=text]:focus { border-color: #2563eb; }
+    button[type=submit] {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 24px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button[type=submit]:active { transform: scale(0.98); }
   </style>
 </head>
 <body>
   <header>🤖 Agen AI Google Cloud</header>
   
-  <div class="upload-area">
-    <input type="file" id="fileInput">
-    <!-- === PERBAIKAN TOMBOL (type="button" DITAMBAHKAN) === -->
-    <button type="button" onclick="uploadFile()">📎 Upload</button>
-    <span id="file-preview"></span>
-  </div>
-
   <div id="chat"></div>
-  
-  <form onsubmit="return kirim(event)">
-    <input id="q" placeholder="Tanya soal Google Cloud...">
-    <button>Kirim</button>
-  </form>
+
+  <div class="footer">
+    <div class="upload-row">
+      <input type="file" id="fileInput" accept="image/*">
+      <button type="button" class="btn-upload" onclick="document.getElementById('fileInput').click()">📎 Upload</button>
+      <span id="file-preview"></span>
+    </div>
+    <form class="chat-row" onsubmit="return kirim(event)">
+      <input id="q" placeholder="Tanya soal Google Cloud..." autocomplete="off">
+      <button type="submit">Kirim</button>
+    </form>
+  </div>
 
 <script>
   function add(cls, text) {
@@ -153,7 +257,7 @@ const HTML = `<!DOCTYPE html>
     d.className = 'msg ' + cls;
     d.textContent = text;
     document.getElementById('chat').appendChild(d);
-    d.scrollIntoView(false);
+    d.scrollIntoView({ behavior: 'smooth', block: 'end' });
     return d;
   }
 
@@ -174,47 +278,44 @@ const HTML = `<!DOCTYPE html>
         t.textContent = '🚀 ' + d.skills.join(', ');
         bot.appendChild(t);
       }
-    } catch (err) {
-      bot.textContent = 'Error: ' + err.message;
-    }
+    } catch (err) { bot.textContent = 'Error: ' + err.message; }
     return false;
   }
 
-  async function uploadFile() {
-    console.log("Tombol upload diklik!");
-    const input = document.getElementById('fileInput');
-    const preview = document.getElementById('file-preview');
-    const file = input.files[0];
+  // Otomatis upload saat user memilih file dari dialog
+  document.getElementById('fileInput').addEventListener('change', async function() {
+    if (this.files && this.files.length > 0) {
+      const file = this.files[0];
+      const preview = document.getElementById('file-preview');
+      const formData = new FormData();
+      formData.append('file', file);
 
-    if (!file) {
-      preview.textContent = 'Pilih file dulu!';
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
       preview.textContent = '⏳ Uploading...';
-      const res = await fetch('/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (res.ok) {
-        preview.textContent = '✅ ' + data.file.name + ' (' + data.file.size + ' bytes)';
-      } else {
-        preview.textContent = '❌ ' + (data.error || 'Gagal upload');
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok) {
+          preview.textContent = '✅ ' + data.file.name;
+          if (data.answer) {
+            add('user', '📷 [Mengunggah gambar: ' + data.file.name + ']');
+            add('bot', data.answer);
+          }
+        } else {
+          preview.textContent = '❌ ' + (data.error || 'Gagal upload');
+        }
+      } catch (err) {
+        preview.textContent = '❌ Error: ' + err.message;
       }
-    } catch (err) {
-      preview.textContent = '❌ Error: ' + err.message;
+      // Reset input agar bisa memilih file yang sama lagi nanti
+      this.value = '';
     }
-  }
+  });
 </script>
 </body>
 </html>`;
 
-// Route untuk menampilkan HTML
 app.get("/", (req, res) => { res.send(HTML); });
 
-// Jalankan server secara lokal, namun biarkan Vercel mengambil alih jika di-deploy
 if (require.main === module) {
   app.listen(PORT, () => console.log("Server jalan di port " + PORT));
 }
