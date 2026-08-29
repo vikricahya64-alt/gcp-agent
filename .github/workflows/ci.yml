@@ -1,0 +1,28 @@
+name: CI Agen GCP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Pasang Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependensi
+        working-directory: agen
+        run: npm install
+
+      - name: Cek sintaks kode
+        working-directory: agen
+        run: |
+          node --check agent.js
+          node --check server.js
