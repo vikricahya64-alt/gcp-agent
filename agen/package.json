@@ -1,16 +1,9 @@
 {
-  "name": "agen",
+  "name": "gcp-agent-root",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1"
+    "@google/generative-ai": "^0.24.0",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
   }
 }
