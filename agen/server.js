@@ -2,9 +2,17 @@ const express = require("express");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
+const multer = require("multer"); // <-- TAMBAHAN
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // <-- TAMBAHAN
+
+// Konfigurasi multer
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024 } // 4 MB
+}).single('file');
 
 const KEY = process.env.GEMINI_API_KEY;
 const REPO = path.resolve(__dirname, "..");
@@ -43,6 +51,7 @@ function pick(q){
   }).sort((a,b)=>b.s-a.s);
 }
 
+// ===== ENDPOINT ASK (TIDAK DIUBAH) =====
 app.post("/ask", async (req,res)=>{
   const q=(req.body.question||"").trim();
   if(!q) return res.status(400).json({error:"Pertanyaan kosong"});
@@ -58,6 +67,27 @@ app.post("/ask", async (req,res)=>{
   }catch(e){ res.status(500).json({error:e.message}); }
 });
 
+// ===== ENDPOINT UPLOAD (FITUR BARU) =====
+app.post("/upload", (req, res) => {
+  upload(req, res, function (err) {
+    if (err) {
+      return res.status(400).json({ error: "Upload error: " + err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: "Tidak ada file yang dikirim" });
+    }
+    res.json({
+      message: "Upload berhasil!",
+      file: {
+        name: req.file.originalname,
+        size: req.file.size,
+        type: req.file.mimetype
+      }
+    });
+  });
+});
+
+// ===== HALAMAN UTAMA (HTML) =====
 const HTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -75,15 +105,29 @@ header{padding:12px;background:#1e293b;text-align:center;font-weight:bold;color:
 form{display:flex;gap:8px;padding:10px;background:#1e293b}
 input{flex:1;padding:12px;border-radius:10px;border:1px solid #334155;background:#0f172a;color:#e2e8f0;font-size:15px}
 button{padding:12px 16px;border-radius:10px;border:none;background:#38bdf8;color:#0f172a;font-weight:bold}
+.upload-area{background:#1e293b;padding:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #334155}
+.upload-area input[type="file"]{flex:1;color:#e2e8f0;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:6px}
+.upload-area button{background:#0ea5e9;border:none;padding:8px 16px;border-radius:8px;color:white;font-weight:bold;cursor:pointer}
+.upload-area button:hover{background:#38bdf8}
+#file-preview{color:#94a3b8;font-size:13px}
 </style>
 </head>
 <body>
 <header>🤖 Agen AI Google Cloud</header>
+
+<!-- FORM UPLOAD -->
+<div class="upload-area">
+  <input type="file" id="fileInput">
+  <button onclick="uploadFile()">📎 Upload</button>
+  <span id="file-preview"></span>
+</div>
+
 <div id="chat"></div>
 <form onsubmit="return kirim(event)">
 <input id="q" placeholder="Tanya soal Google Cloud..." autocomplete="off">
 <button>Kirim</button>
 </form>
+
 <script>
 function add(cls,text){
   var d=document.createElement('div');
@@ -93,6 +137,7 @@ function add(cls,text){
   d.scrollIntoView(false);
   return d;
 }
+
 async function kirim(e){
   e.preventDefault();
   var q=document.getElementById('q').value.trim();
@@ -112,6 +157,31 @@ async function kirim(e){
     }
   }catch(err){ bot.textContent='Error: '+err.message; }
   return false;
+}
+
+// FUNGSI UPLOAD FILE
+async function uploadFile() {
+  const input = document.getElementById('fileInput');
+  const preview = document.getElementById('file-preview');
+  const file = input.files[0];
+  if (!file) {
+    preview.textContent = 'Pilih file dulu!';
+    return;
+  }
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    preview.textContent = '⏳ Uploading...';
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (res.ok) {
+      preview.textContent = '✅ ' + data.file.name + ' (' + (data.file.size/1024).toFixed(1) + ' KB)';
+    } else {
+      preview.textContent = '❌ ' + (data.error || 'Gagal upload');
+    }
+  } catch (err) {
+    preview.textContent = '❌ Error: ' + err.message;
+  }
 }
 </script>
 </body>
