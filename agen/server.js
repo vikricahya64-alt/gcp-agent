@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Konfigurasi Upload (Wajib memoryStorage untuk Vercel, max 4MB)
+// Konfigurasi Upload (Wajib memoryStorage untuk Vercel, maksimal 4MB)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 4 * 1024 * 1024 }
@@ -20,7 +20,7 @@ const SKILLS_DIR = path.join(REPO, "skills");
 const PORT = process.env.PORT || 3000;
 
 const genAI = new GoogleGenerativeAI(KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Sesuaikan model jika perlu
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // Fungsi membaca skill
 function findSkills(dir, out = []) {
@@ -32,7 +32,6 @@ function findSkills(dir, out = []) {
   return out;
 }
 
-// Pastikan folder skills ada, jika tidak buat array kosong
 let index = [];
 try {
   index = findSkills(SKILLS_DIR).map(f => ({
@@ -44,7 +43,6 @@ try {
   console.log("Folder skills tidak ditemukan atau kosong, melanjutkan tanpa skill.");
 }
 
-// Fungsi tokenizer sederhana
 const STOP = new Set(["apa", "itu", "ini", "dan", "yang", "di", "ke", "dari"]);
 function tokens(q) { return q.toLowerCase().split(/\W+/).filter(t => t && !STOP.has(t)); }
 
@@ -59,7 +57,7 @@ function pick(q) {
   }).sort((a,b) => b.s - a.s).slice(0, 3).filter(x => x.s > 0);
 }
 
-// ========================= ROUTE CHAT =========================
+// ===================== ROUTE CHAT =====================
 app.post("/ask", async (req, res) => {
   const q = (req.body.question || "").trim();
   if (!q) return res.status(400).json({ error: "Pertanyaan kosong" });
@@ -79,7 +77,7 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-// ========================= ROUTE UPLOAD =========================
+// ===================== ROUTE UPLOAD =====================
 app.post("/upload", (req, res) => {
   upload(req, res, function (err) {
     if (err) {
@@ -92,9 +90,8 @@ app.post("/upload", (req, res) => {
     }
 
     console.log("File berhasil masuk:", req.file.originalname, req.file.size);
-    
-    // Di sini kamu bisa mengolah file (req.file.buffer) untuk dikirim ke Gemini.
-    // Contoh sementara hanya mengembalikan metadata file:
+    // Anda bisa menambahkan logika pengolahan gambar ke Gemini di sini menggunakan req.file.buffer
+
     res.json({
       message: "Upload berhasil!",
       file: {
@@ -106,7 +103,7 @@ app.post("/upload", (req, res) => {
   });
 });
 
-// ========================= TAMPILAN HTML (FRONTEND) =========================
+// ===================== FRONTEND HTML & CSS =====================
 const HTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -124,11 +121,13 @@ const HTML = `<!DOCTYPE html>
     form{display:flex;gap:8px;padding:10px;background:#1e293b}
     input[type=text]{flex:1;padding:12px;border-radius:10px;border:none;font-size:16px}
     button{padding:12px 16px;border-radius:10px;border:none;background:#0ea5e9;color:#fff;font-weight:bold}
-    .upload-area{background:#1e293b;padding:10px;display:flex;align-items:center;gap:10px}
-    .upload-area input[type=file]{flex:1;color:#e2e8f0}
-    .upload-area button{background:#0ea5e9}
+    
+    /* === PERBAIKAN CSS UNTUK TAMPILAN HP (AGAR TIDAK TERPOTONG) === */
+    .upload-area{background:#1e293b;padding:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+    .upload-area input[type=file]{flex:1;min-width:100px;font-size:12px;color:#e2e8f0}
+    .upload-area button{background:#0ea5e9;white-space:nowrap}
     .upload-area button:hover{background:#38bdf8}
-    #file-preview{color:#94a3b8;font-size:13px}
+    #file-preview{color:#94a3b8;font-size:13px;width:100%}
   </style>
 </head>
 <body>
@@ -136,7 +135,7 @@ const HTML = `<!DOCTYPE html>
   
   <div class="upload-area">
     <input type="file" id="fileInput">
-    <!-- PERBAIKAN UTAMA ADA DI SINI (type="button") -->
+    <!-- === PERBAIKAN TOMBOL (type="button" DITAMBAHKAN) === -->
     <button type="button" onclick="uploadFile()">📎 Upload</button>
     <span id="file-preview"></span>
   </div>
@@ -182,9 +181,7 @@ const HTML = `<!DOCTYPE html>
   }
 
   async function uploadFile() {
-    // Debugging: pastikan fungsi berjalan saat tombol diklik
     console.log("Tombol upload diklik!");
-    
     const input = document.getElementById('fileInput');
     const preview = document.getElementById('file-preview');
     const file = input.files[0];
