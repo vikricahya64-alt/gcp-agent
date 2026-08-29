@@ -18,6 +18,10 @@ const REPO = path.resolve(__dirname, "..");
 const SKILLS_DIR = path.join(REPO, "skills");
 const PORT = process.env.PORT || 3000;
 
+if (!KEY) {
+  console.error("❌ FATAL ERROR: GEMINI_API_KEY belum diset di Environment Variables Vercel!");
+}
+
 const genAI = new GoogleGenerativeAI(KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -64,7 +68,10 @@ app.post("/ask", async (req, res) => {
       contents: [{ role: "user", parts: [{ text: "Kamu agen AI ahli Google Cloud. Jawab singkat.\n\nKonteks:\n" + context + "\n\nPertanyaan: " + q }] }]
     });
     res.json({ answer: r.response.text(), skills: top.map(x => x.name) });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { 
+    console.error("Error /ask:", e.message);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.post("/upload", async (req, res) => {
@@ -73,13 +80,21 @@ app.post("/upload", async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Tidak ada file yang dipilih" });
     try {
       const imagePart = { inlineData: { data: req.file.buffer.toString('base64'), mimeType: req.file.mimetype } };
+      // Tambahkan log untuk memantau apakah file sampai ke sini
+      console.log("File diterima:", req.file.originalname, "Ukuran:", req.file.size);
+      
       const r = await model.generateContent({ contents: [{ role: "user", parts: [{ text: "Analisis gambar ini secara detail." }, imagePart] }] });
+      
       res.json({ message: "Upload berhasil!", answer: r.response.text(), file: { name: req.file.originalname, size: req.file.size } });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+      // Ini adalah kunci untuk melihat error asli dari Google!
+      console.error("❌ ERROR GEMINI SAAT UPLOAD:", e.message);
+      res.status(500).json({ error: e.message }); 
+    }
   });
 });
 
-// ================== UI SEMPURNA & RESPONSIF (100dvh) ==================
+// ================== UI SEMPURNA & RESPONSIF ==================
 const HTML = `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -96,10 +111,8 @@ const HTML = `<!DOCTYPE html>
       color: #f8fafc;
       display: flex;
       flex-direction: column;
-      height: 100dvh; /* Kunci penting: Menyesuaikan dengan keyboard HP */
+      height: 100dvh;
     }
-
-    /* Header */
     header {
       padding: 15px;
       background: #1e293b;
@@ -108,13 +121,7 @@ const HTML = `<!DOCTYPE html>
       font-size: 18px;
       border-bottom: 1px solid #334155;
       flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
     }
-
-    /* Chat Area (Fleksibel) */
     #chat {
       flex: 1;
       overflow-y: auto;
@@ -125,8 +132,6 @@ const HTML = `<!DOCTYPE html>
       background: #0f172a;
       scroll-behavior: smooth;
     }
-
-    /* Bubble Chat */
     .msg {
       max-width: 85%;
       padding: 12px 14px;
@@ -137,25 +142,10 @@ const HTML = `<!DOCTYPE html>
       white-space: pre-wrap;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
-    .user {
-      align-self: flex-end;
-      background: #2563eb;
-      border-bottom-right-radius: 4px;
-    }
-    .bot {
-      align-self: flex-start;
-      background: #334155;
-      border-bottom-left-radius: 4px;
-    }
-    .tag {
-      display: block;
-      margin-top: 8px;
-      font-size: 11px;
-      color: #94a3b8;
-      font-style: italic;
-    }
+    .user { align-self: flex-end; background: #2563eb; border-bottom-right-radius: 4px; }
+    .bot { align-self: flex-start; background: #334155; border-bottom-left-radius: 4px; }
+    .tag { display: block; margin-top: 8px; font-size: 11px; color: #94a3b8; font-style: italic; }
 
-    /* Area Input & Upload (Footer Tetap di Bawah) */
     .footer {
       background: #1e293b;
       padding: 12px;
@@ -165,18 +155,17 @@ const HTML = `<!DOCTYPE html>
       flex-direction: column;
       gap: 10px;
     }
+    .upload-row { display: flex; gap: 10px; align-items: center; }
 
-    .upload-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    /* Sembunyikan Input File Asli, Pakai Custom Button */
+    /* Trik Label Untuk WebView Android */
     #fileInput {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      overflow: hidden;
+      z-index: -1;
     }
-
     .btn-upload {
       background: #2563eb;
       color: white;
@@ -187,6 +176,8 @@ const HTML = `<!DOCTYPE html>
       cursor: pointer;
       font-size: 14px;
       white-space: nowrap;
+      display: inline-block;
+      text-align: center;
       transition: background 0.2s;
     }
     .btn-upload:hover { background: #1d4ed8; }
@@ -205,11 +196,7 @@ const HTML = `<!DOCTYPE html>
       border: 1px solid #334155;
     }
 
-    /* Baris Chat Input */
-    .chat-row {
-      display: flex;
-      gap: 10px;
-    }
+    .chat-row { display: flex; gap: 10px; }
     input[type=text] {
       flex: 1;
       padding: 12px 16px;
@@ -222,14 +209,8 @@ const HTML = `<!DOCTYPE html>
     }
     input[type=text]:focus { border-color: #2563eb; }
     button[type=submit] {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 12px 20px;
-      border-radius: 24px;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 16px;
+      background: #2563eb; color: white; border: none; padding: 12px 20px;
+      border-radius: 24px; font-weight: 700; cursor: pointer; font-size: 16px;
     }
     button[type=submit]:active { transform: scale(0.98); }
   </style>
@@ -241,8 +222,9 @@ const HTML = `<!DOCTYPE html>
 
   <div class="footer">
     <div class="upload-row">
+      <!-- Perbaikan Utama: Label for="" akan otomatis memicu file dialog di WebView tanpa perlu JS .click() -->
       <input type="file" id="fileInput" accept="image/*">
-      <button type="button" class="btn-upload" onclick="document.getElementById('fileInput').click()">📎 Upload</button>
+      <label for="fileInput" class="btn-upload">📎 Upload</label>
       <span id="file-preview"></span>
     </div>
     <form class="chat-row" onsubmit="return kirim(event)">
@@ -282,7 +264,7 @@ const HTML = `<!DOCTYPE html>
     return false;
   }
 
-  // Otomatis upload saat user memilih file dari dialog
+  // Event listener saat file dipilih
   document.getElementById('fileInput').addEventListener('change', async function() {
     if (this.files && this.files.length > 0) {
       const file = this.files[0];
@@ -306,7 +288,6 @@ const HTML = `<!DOCTYPE html>
       } catch (err) {
         preview.textContent = '❌ Error: ' + err.message;
       }
-      // Reset input agar bisa memilih file yang sama lagi nanti
       this.value = '';
     }
   });
