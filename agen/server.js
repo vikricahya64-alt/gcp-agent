@@ -183,22 +183,6 @@ async function uploadFile() {
 
 app.get("/", (req,res)=>{ res.send(HTML); });
 
-// ===== ENDPOINT /ping LANGSUNG (untuk test) =====
-app.get('/ping', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-// ===============================================
-
-// ===== SISTEM EKSTENSI (Loader) =====
-try {
-  const { registerExtensions } = require('./extensions/loader');
-  registerExtensions(app);
-  console.log('✅ Sistem ekstensi aktif.');
-} catch (err) {
-  console.error('⚠️ Gagal memuat ekstensi, server tetap berjalan:', err.message);
-}
-// ====================================
-
 if (require.main === module) {
   app.listen(PORT, () => console.log("Server jalan di port " + PORT));
 }
