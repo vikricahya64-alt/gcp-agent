@@ -1,8 +1,15 @@
-export async function callGemini(prompt, options = {}) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const model = options.model || 'gemini-1.5-flash';
+const API_KEYS = [
+  process.env.GEMINI_API_KEY,
+  process.env.GEMINI_API_KEY_BACKUP,
+  process.env.GEMINI_API_KEY_SECONDARY
+].filter(Boolean);
 
-  if (!apiKey) {
+let keyIndex = 0;
+
+export async function callGemini(prompt, options = {}) {
+  const model = options.model || 'gemini-3.6-flash';
+
+  if (API_KEYS.length === 0) {
     return {
       success: false,
       error: 'Gemini API key tidak ditemukan',
@@ -11,33 +18,57 @@ export async function callGemini(prompt, options = {}) {
     };
   }
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: options.temperature || 0.7,
-            maxOutputTokens: options.maxTokens || 1024
-          }
-        })
+  let lastError = null;
+
+  for (let attempt = 0; attempt < API_KEYS.length; attempt++) {
+    const apiKey = API_KEYS[keyIndex % API_KEYS.length];
+    keyIndex++;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: options.temperature || 0.7,
+              maxOutputTokens: options.maxTokens || 1024
+            }
+          })
+        }
+      );
+
+      if (response.status === 429 || response.status === 403) {
+        lastError = `Rate limit / auth (${response.status}) pada key #${(keyIndex - 1) % API_KEYS.length + 1}, beralih ke key berikutnya`;
+        continue;
       }
-    );
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        lastError = `API error: ${response.status}`;
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      return { success: true, response: text, model, keyUsed: (keyIndex - 1) % API_KEYS.length + 1 };
+    } catch (error) {
+      lastError = error.message;
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    return { success: true, response: text, model };
-  } catch (error) {
-    return { success: false, error: error.message, fallback: true, response: generateFallbackResponse(prompt) };
   }
+
+  return {
+    success: false,
+    error: lastError,
+    fallback: true,
+    response: generateFallbackResponse(prompt)
+  };
+}
+
+export function getActiveKeysCount() {
+  return API_KEYS.length;
 }
 
 function generateFallbackResponse(prompt) {
@@ -71,13 +102,13 @@ Action: Konfigurasi GEMINI_API_KEY untuk response yang lebih baik`;
 }
 
 export async function generateCode(task) {
-  return callGemini(`Buatkan kode untuk: ${task}. Berikan response dalam format kode yang siap pakai.`, { model: 'gemini-1.5-flash' });
+  return callGemini(`Buatkan kode untuk: ${task}. Berikan response dalam format kode yang siap pakai.`, { model: 'gemini-3.6-flash' });
 }
 
 export async function analyzeData(data) {
-  return callGemini(`Analisis data berikut: ${data}. Berikan insight dan kesimpulan.`, { model: 'gemini-1.5-pro' });
+  return callGemini(`Analisis data berikut: ${data}. Berikan insight dan kesimpulan.`, { model: 'gemini-3.6-flash' });
 }
 
 export async function generateContent(topic) {
-  return callGemini(`Buatkan konten untuk: ${topic}. Tulis dengan baik dan terstruktur.`, { model: 'gemini-1.5-flash' });
+  return callGemini(`Buatkan konten untuk: ${topic}. Tulis dengan baik dan terstruktur.`, { model: 'gemini-3.6-flash' });
 }

@@ -10,12 +10,10 @@ const categories = [
 ];
 
 const models = [
-  { name: 'gemini-1.5-flash', provider: 'Google', type: 'free', cost: 0 },
-  { name: 'gemini-1.5-pro', provider: 'Google', type: 'paid', cost: 3.5 },
-  { name: 'llama3-8b', provider: 'Meta', type: 'free', cost: 0 },
-  { name: 'llama3-70b', provider: 'Meta', type: 'paid', cost: 1 },
-  { name: 'claude-3-haiku', provider: 'Anthropic', type: 'paid', cost: 0.25 },
-  { name: 'claude-3-sonnet', provider: 'Anthropic', type: 'paid', cost: 3 }
+  { name: 'gemini-3.6-flash', provider: 'Google', type: 'free', cost: 0 },
+  { name: 'gemini-3.7-flash', provider: 'Google', type: 'paid', cost: 3.5 },
+  { name: 'gemma-4-31b-it', provider: 'Google', type: 'free', cost: 0 },
+  { name: 'gemini-3-pro-image', provider: 'Google', type: 'paid', cost: 1 }
 ];
 
 export class Orchestrator {
